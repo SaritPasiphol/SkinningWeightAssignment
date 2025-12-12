@@ -13,6 +13,8 @@
 #include <limits>
 #include <algorithm>
 
+#include "HeatDiffusion.h"
+
 // --- Structures ---
 struct Vertex {
     glm::vec3 originalPosition;
@@ -44,7 +46,9 @@ float lastX = 400, lastY = 300;
 // Camera
 float camYaw   = -90.0f; 
 float camPitch =  0.0f; 
-float camRadius = 8.0f; 
+float camRadius = 8.0f;
+// Weight calculation method
+bool useHeatDiffusion = false; // Toggle: false = Geodesic, true = Heat Diffusion 
 
 // --- Shaders ---
 const char* vertexShaderSource = R"(
@@ -181,34 +185,41 @@ std::vector<float> computeGeodesicMap(int startNode) {
 
 void computeBoneWeights() {
     if (skeleton.empty()) return;
-    std::cout << "Computing Geodesic Weights..." << std::endl;
-    for (auto& bone : skeleton) {
-        float minDst = std::numeric_limits<float>::max();
-        int bestIdx = -1;
+    
+    if (useHeatDiffusion) {
+        // Use Heat Diffusion method
+        HeatDiffusion::computeBoneWeights(vertices, indices, adjacency, skeleton);
+    } else {
+        // Use Geodesic method (original)
+        std::cout << "Computing Geodesic Weights..." << std::endl;
+        for (auto& bone : skeleton) {
+            float minDst = std::numeric_limits<float>::max();
+            int bestIdx = -1;
+            for (int i = 0; i < vertices.size(); ++i) {
+                float d = glm::distance(bone.bindPosition, vertices[i].originalPosition);
+                if (d < minDst) { minDst = d; bestIdx = i; }
+            }
+            bone.seedVertex = bestIdx;
+        }
+        std::vector<std::vector<float>> allDistances;
+        for (auto& bone : skeleton) allDistances.push_back(computeGeodesicMap(bone.seedVertex));
         for (int i = 0; i < vertices.size(); ++i) {
-            float d = glm::distance(bone.bindPosition, vertices[i].originalPosition);
-            if (d < minDst) { minDst = d; bestIdx = i; }
+            float totalInverseDist = 0.0f;
+            std::vector<float> tempWeights;
+            for (const auto& dMap : allDistances) {
+                float w = 1.0f / (pow(dMap[i], 4.0f) + 0.0001f); 
+                tempWeights.push_back(w); totalInverseDist += w;
+            }
+            glm::vec3 debugColor(0.0f);
+            for (int b = 0; b < skeleton.size(); ++b) {
+                float normW = tempWeights[b] / totalInverseDist;
+                vertices[i].boneWeights.push_back(normW);
+                debugColor += skeleton[b].color * normW;
+            }
+            vertices[i].color = debugColor;
         }
-        bone.seedVertex = bestIdx;
+        std::cout << "Weights Calculated." << std::endl;
     }
-    std::vector<std::vector<float>> allDistances;
-    for (auto& bone : skeleton) allDistances.push_back(computeGeodesicMap(bone.seedVertex));
-    for (int i = 0; i < vertices.size(); ++i) {
-        float totalInverseDist = 0.0f;
-        std::vector<float> tempWeights;
-        for (const auto& dMap : allDistances) {
-            float w = 1.0f / (pow(dMap[i], 4.0f) + 0.0001f); 
-            tempWeights.push_back(w); totalInverseDist += w;
-        }
-        glm::vec3 debugColor(0.0f);
-        for (int b = 0; b < skeleton.size(); ++b) {
-            float normW = tempWeights[b] / totalInverseDist;
-            vertices[i].boneWeights.push_back(normW);
-            debugColor += skeleton[b].color * normW;
-        }
-        vertices[i].color = debugColor;
-    }
-    std::cout << "Weights Calculated." << std::endl;
 }
 
 void updateSkinning() {
@@ -225,6 +236,20 @@ void updateSkinning() {
 // --- Input Callbacks ---
 void processInput(GLFWwindow *window) {
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
+    
+    // Toggle weight calculation method with H key
+    static bool hKeyPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS && !hKeyPressed) {
+        useHeatDiffusion = !useHeatDiffusion;
+        std::cout << "Switching to " << (useHeatDiffusion ? "Heat Diffusion" : "Geodesic") << " method..." << std::endl;
+        // Recalculate weights
+        for (auto& v : vertices) { v.boneWeights.clear(); }
+        computeBoneWeights();
+        hKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_H) == GLFW_RELEASE) {
+        hKeyPressed = false;
+    }
     
     // Cycle Selection with Brackets
     static bool bracketPressed = false;
@@ -286,7 +311,7 @@ int main(int argc, char** argv) {
     computeBoneWeights();
 
     if (!glfwInit()) return -1;
-    GLFWwindow* window = glfwCreateWindow(1024, 768, "[ ] to Select Bone, WASD to Move", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1024, 768, "[ ] Select Bone | WASD Move | H Toggle Heat/Geodesic", NULL, NULL);
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
