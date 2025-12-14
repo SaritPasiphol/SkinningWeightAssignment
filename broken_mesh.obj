@@ -1,0 +1,40 @@
+# Broken Mesh with Holes and Self-Intersections
+# This mesh intentionally has topology defects for testing
+
+# Cube with missing faces (holes)
+v -1.0 -1.0  1.0
+v  1.0 -1.0  1.0
+v  1.0  1.0  1.0
+v -1.0  1.0  1.0
+v -1.0 -1.0 -1.0
+v  1.0 -1.0 -1.0
+v  1.0  1.0 -1.0
+v -1.0  1.0 -1.0
+
+# Front face
+f 1 2 3 4
+
+# Right face
+f 2 6 7 3
+
+# Back face (MISSING - creates hole)
+# f 5 8 7 6
+
+# Left face
+f 5 1 4 8
+
+# Top face
+f 4 3 7 8
+
+# Bottom face (MISSING - creates hole)
+# f 5 6 2 1
+
+# Add some intersecting geometry (self-intersection)
+v 0.0 -1.5 0.0
+v 0.0  1.5 0.0
+v 1.5  0.0 0.0
+v -1.5 0.0 0.0
+
+# Cross piece that intersects the cube
+f 9 10 11
+f 9 10 12

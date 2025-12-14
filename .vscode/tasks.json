@@ -10,6 +10,7 @@
         "${workspaceFolder}/main.cpp",
         "${workspaceFolder}/HeatDiffusion.cpp",
         "${workspaceFolder}/MeshDiagnostics.cpp",
+        "${workspaceFolder}/VoxelHeatDiffusion.cpp",
         "${workspaceFolder}/glad.c",
         // Corrected Include Path:
         "-I${workspaceFolder}/include",

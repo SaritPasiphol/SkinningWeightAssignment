@@ -15,6 +15,7 @@
 
 #include "HeatDiffusion.h"
 #include "MeshDiagnostics.h"
+#include "VoxelHeatDiffusion.h"
 
 // --- Structures ---
 struct Vertex {
@@ -49,7 +50,9 @@ float camYaw   = -90.0f;
 float camPitch =  0.0f; 
 float camRadius = 8.0f;
 // Weight calculation method
-bool useHeatDiffusion = false; // Toggle: false = Geodesic, true = Heat Diffusion 
+bool useHeatDiffusion = false; // Toggle: false = Geodesic, true = Heat Diffusion
+bool useVoxelMethod = false;   // Toggle: false = Surface, true = Voxel-based
+GLFWwindow* globalWindow = nullptr; // For updating window title 
 
 // --- Shaders ---
 const char* vertexShaderSource = R"(
@@ -186,9 +189,25 @@ std::vector<float> computeGeodesicMap(int startNode) {
 
 void computeBoneWeights() {
     if (skeleton.empty()) return;
+    // Update window title to show current mode
+    if (globalWindow) {
+        std::string title = "[ ] Select | WASD Move | Mode: ";
+        if (useVoxelMethod) {
+            title += "VOXEL (J) | H:Surface";
+        } else if (useHeatDiffusion) {
+            title += "SURFACE-HEAT (H) | J:Voxel";
+        } else {
+            title += "GEODESIC | H:Heat | J:Voxel";
+        }
+        glfwSetWindowTitle(globalWindow, title.c_str());
+    }
     
-    if (useHeatDiffusion) {
-        // Use Heat Diffusion method
+    
+    if (useVoxelMethod) {
+        // Use Voxel-based Heat Diffusion (robust to defects!)
+        VoxelHeatDiffusion::computeBoneWeights(vertices, indices, skeleton, 32);
+    } else if (useHeatDiffusion) {
+        // Use Surface Heat Diffusion method
         HeatDiffusion::computeBoneWeights(vertices, indices, adjacency, skeleton);
     } else {
         // Use Geodesic method (original)
@@ -238,11 +257,12 @@ void updateSkinning() {
 void processInput(GLFWwindow *window) {
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
     
-    // Toggle weight calculation method with H key
+    // Toggle weight calculation method with H key (Surface Heat vs Geodesic)
     static bool hKeyPressed = false;
     if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS && !hKeyPressed) {
         useHeatDiffusion = !useHeatDiffusion;
-        std::cout << "Switching to " << (useHeatDiffusion ? "Heat Diffusion" : "Geodesic") << " method..." << std::endl;
+        useVoxelMethod = false; // Disable voxel when toggling H
+        std::cout << "Switching to " << (useHeatDiffusion ? "Surface Heat Diffusion" : "Geodesic") << " method..." << std::endl;
         // Recalculate weights
         for (auto& v : vertices) { v.boneWeights.clear(); }
         computeBoneWeights();
@@ -250,6 +270,22 @@ void processInput(GLFWwindow *window) {
     }
     if (glfwGetKey(window, GLFW_KEY_H) == GLFW_RELEASE) {
         hKeyPressed = false;
+    }
+    
+    // Toggle voxel-based method with J key (Robust for broken meshes!)
+    static bool jKeyPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS && !jKeyPressed) {
+        useVoxelMethod = !useVoxelMethod;
+        std::cout << "\n========================================" << std::endl;
+        std::cout << "Switching to " << (useVoxelMethod ? "VOXEL-BASED" : (useHeatDiffusion ? "Surface Heat" : "Geodesic")) << " method..." << std::endl;
+        std::cout << "========================================\n" << std::endl;
+        // Recalculate weights
+        for (auto& v : vertices) { v.boneWeights.clear(); }
+        computeBoneWeights();
+        jKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE) {
+        jKeyPressed = false;
     }
     
     // Cycle Selection with Brackets
@@ -332,13 +368,14 @@ int main(int argc, char** argv) {
         return -1;
     }
     std::cout << "Creating window..." << std::endl;
-    GLFWwindow* window = glfwCreateWindow(1024, 768, "[ ] Select Bone | WASD Move | H Toggle Heat/Geodesic", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1024, 768, "[ ] Select | WASD Move | H:Heat | J:Voxel", NULL, NULL);
     if (!window) {
         std::cout << "ERROR: Failed to create GLFW window!" << std::endl;
         glfwTerminate();
         return -1;
     }
     std::cout << "Window created successfully!" << std::endl;
+    globalWindow = window; // Store for title updates
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 

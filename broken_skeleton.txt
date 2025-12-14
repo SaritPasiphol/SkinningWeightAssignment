@@ -1,0 +1,8 @@
+# Skeleton for Broken Mesh Test
+# Name          X     Y     Z      R    G    B
+
+Center         0.0   0.0   0.0    1.0  0.0  0.0
+Top            0.0   1.0   0.0    0.0  1.0  0.0
+Bottom         0.0  -1.0   0.0    0.0  0.0  1.0
+Right          1.0   0.0   0.0    1.0  1.0  0.0
+Left          -1.0   0.0   0.0    1.0  0.0  1.0

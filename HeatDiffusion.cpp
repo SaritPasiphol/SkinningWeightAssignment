@@ -174,7 +174,14 @@ void HeatDiffusion::computeBoneWeights(
     std::cout << "  Building Laplacian..." << std::endl;
     auto laplacian = buildCotangentLaplacian(vertices, indices);
 
-    // 3. Calculate average edge length for better time step
+    // 3. Calculate mesh size and average edge length
+    glm::vec3 minBound(1e9f), maxBound(-1e9f);
+    for (const auto& v : vertices) {
+        minBound = glm::min(minBound, v.originalPosition);
+        maxBound = glm::max(maxBound, v.originalPosition);
+    }
+    float meshDiameter = glm::distance(minBound, maxBound);
+    
     float avgEdgeLength = 0.0f;
     int edgeCount = 0;
     for (const auto& edges : adjacency) {
@@ -185,15 +192,23 @@ void HeatDiffusion::computeBoneWeights(
     }
     if (edgeCount > 0) avgEdgeLength /= edgeCount;
     
-    // Use MUCH larger time step to allow heat to spread across entire mesh
-    float adaptiveTimeStep = avgEdgeLength * avgEdgeLength * 50.0f;
-    std::cout << "  Average edge length: " << avgEdgeLength << ", Time step: " << adaptiveTimeStep << std::endl;
+    // Adaptive time step: smaller for smaller meshes
+    // We want heat to spread locally, not globally
+    // Use much smaller percentage for local diffusion (5-8% of diameter)
+    float targetDiffusionLength = meshDiameter * 0.08f;
+    float adaptiveTimeStep = (targetDiffusionLength * targetDiffusionLength) / 10.0f;
+    
+    // Adaptive iteration count: fewer iterations to prevent over-diffusion
+    int adaptiveIterations = std::min(300, std::max(80, (int)(meshDiameter * 50)));
+    
+    std::cout << "  Mesh diameter: " << meshDiameter << ", Avg edge: " << avgEdgeLength << std::endl;
+    std::cout << "  Time step: " << adaptiveTimeStep << ", Iterations: " << adaptiveIterations << std::endl;
 
-    // 4. Solve heat diffusion from each bone with more iterations
+    // 4. Solve heat diffusion from each bone
     std::vector<std::vector<float>> allHeatMaps;
     for (int b = 0; b < skeleton.size(); ++b) {
         std::cout << "  Solving heat for bone " << (b+1) << "/" << skeleton.size() << std::endl;
-        auto heatMap = solveHeatDiffusion(vertices, laplacian, skeleton[b].seedVertex, adaptiveTimeStep, 1000);
+        auto heatMap = solveHeatDiffusion(vertices, laplacian, skeleton[b].seedVertex, adaptiveTimeStep, adaptiveIterations);
         allHeatMaps.push_back(heatMap);
     }
 
@@ -209,21 +224,25 @@ void HeatDiffusion::computeBoneWeights(
     for (int i = 0; i < vertices.size(); ++i) {
         vertices[i].boneWeights.clear();
         
-        // Normalize heat values and convert to distances
+        // Convert heat to distance-like values
         std::vector<float> distances;
         for (int b = 0; b < skeleton.size(); ++b) {
             float normalizedHeat = allHeatMaps[b][i] / (maxHeats[b] + 1e-8f);
+            // Clamp to avoid extreme values
+            normalizedHeat = std::max(1e-6f, std::min(1.0f, normalizedHeat));
+            
             // Convert normalized heat [0,1] to distance: high heat = small distance
-            // Use logarithmic scale to prevent extreme values
-            float dist = -std::log(normalizedHeat + 1e-8f);
+            // Use more aggressive exponential to create better contrast
+            float dist = std::pow(-std::log(normalizedHeat), 1.5f);
             distances.push_back(dist);
         }
         
-        // Apply same weighting formula as Geodesic: w = 1 / (dist^4 + epsilon)
+        // Apply inverse weighting with high power for locality
         std::vector<float> tempWeights;
         float totalInverseDist = 0.0f;
         for (const auto& dist : distances) {
-            float w = 1.0f / (std::pow(dist, 4.0f) + 0.0001f);
+            // Use power of 6 for more localized weights
+            float w = 1.0f / (std::pow(dist, 6.0f) + 1e-6f);
             tempWeights.push_back(w);
             totalInverseDist += w;
         }
