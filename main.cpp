@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "HeatDiffusion.h"
+#include "MeshDiagnostics.h"
 
 // --- Structures ---
 struct Vertex {
@@ -303,15 +304,41 @@ int main(int argc, char** argv) {
     std::string objPath = (argc > 1) ? argv[1] : "cat.obj";
     std::string skelPath = (argc > 2) ? argv[2] : "cat_skeleton_16.txt"; // Default to 16 bone file
 
-    if (!loadOBJ(objPath.c_str()) || !loadSkeleton(skelPath.c_str())) {
-        std::cout << "Usage: main.exe [mesh.obj] [skeleton.txt]" << std::endl;
+    if (!loadOBJ(objPath.c_str())) {
+        std::cout << "ERROR: Failed to load mesh: " << objPath << std::endl;
+        return -1;
+    }
+    if (!loadSkeleton(skelPath.c_str())) {
+        std::cout << "ERROR: Failed to load skeleton: " << skelPath << std::endl;
         return -1;
     }
     buildGraph();
+    
+    // Diagnose mesh quality
+    MeshQuality meshQuality = MeshDiagnostics::analyzeMesh(vertices, indices, true);
+    meshQuality.print();
+    
+    // Auto-switch to voxel method if mesh has defects
+    if (!meshQuality.isManifold || meshQuality.hasBoundaryEdges) {
+        std::cout << "⚠ Mesh defects detected! Consider using voxel-based heat diffusion." << std::endl;
+        // TODO: In future, automatically use voxel method here
+    }
+    
     computeBoneWeights();
 
-    if (!glfwInit()) return -1;
+    std::cout << "Initializing GLFW..." << std::endl;
+    if (!glfwInit()) {
+        std::cout << "ERROR: Failed to initialize GLFW!" << std::endl;
+        return -1;
+    }
+    std::cout << "Creating window..." << std::endl;
     GLFWwindow* window = glfwCreateWindow(1024, 768, "[ ] Select Bone | WASD Move | H Toggle Heat/Geodesic", NULL, NULL);
+    if (!window) {
+        std::cout << "ERROR: Failed to create GLFW window!" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    std::cout << "Window created successfully!" << std::endl;
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
