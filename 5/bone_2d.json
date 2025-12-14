@@ -1,0 +1,90 @@
+{
+    "Hips": [
+        511,
+        525
+    ],
+    "Spine": [
+        511,
+        480
+    ],
+    "Spine1": [
+        511,
+        427
+    ],
+    "Spine2": [
+        511,
+        366
+    ],
+    "Neck": [
+        511,
+        299
+    ],
+    "Head": [
+        511,
+        277
+    ],
+    "LeftShoulder": [
+        487,
+        307
+    ],
+    "LeftArm": [
+        438,
+        323
+    ],
+    "LeftForeArm": [
+        339,
+        327
+    ],
+    "LeftHand": [
+        231,
+        323
+    ],
+    "RightShoulder": [
+        535,
+        307
+    ],
+    "RightArm": [
+        583,
+        323
+    ],
+    "RightForeArm": [
+        683,
+        326
+    ],
+    "RightHand": [
+        791,
+        323
+    ],
+    "LeftUpLeg": [
+        470,
+        551
+    ],
+    "LeftLeg": [
+        463,
+        708
+    ],
+    "LeftFoot": [
+        462,
+        827
+    ],
+    "LeftToeBase": [
+        444,
+        899
+    ],
+    "RightUpLeg": [
+        552,
+        551
+    ],
+    "RightLeg": [
+        559,
+        709
+    ],
+    "RightFoot": [
+        560,
+        827
+    ],
+    "RightToeBase": [
+        578,
+        900
+    ]
+}

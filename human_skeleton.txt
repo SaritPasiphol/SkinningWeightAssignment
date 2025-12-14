@@ -1,0 +1,2 @@
+# Converted from bone_2d.json
+# Name           X      Y      Z       R    G    B
