@@ -16,6 +16,7 @@
 #include "HeatDiffusion.h"
 #include "MeshDiagnostics.h"
 #include "VoxelHeatDiffusion.h"
+#include "WeightOptimization.h"
 
 // --- Structures ---
 struct Vertex {
@@ -52,6 +53,8 @@ float camRadius = 8.0f;
 // Weight calculation method
 bool useHeatDiffusion = false; // Toggle: false = Geodesic, true = Heat Diffusion
 bool useVoxelMethod = false;   // Toggle: false = Surface, true = Voxel-based
+bool usePruning = false;       // Toggle: prune to 4 bones per vertex with smoothing
+const int MAX_BONES_PER_VERTEX = 4;
 GLFWwindow* globalWindow = nullptr; // For updating window title 
 
 // --- Shaders ---
@@ -187,6 +190,13 @@ std::vector<float> computeGeodesicMap(int startNode) {
     return dist;
 }
 
+// Wrapper function for pruning
+void pruneWeights() {
+    if (skeleton.empty() || vertices.empty()) return;
+    WeightOptimization::pruneWeights(vertices, skeleton, MAX_BONES_PER_VERTEX);
+    WeightOptimization::smoothWeights(vertices, adjacency, skeleton, 2);
+}
+
 void computeBoneWeights() {
     if (skeleton.empty()) return;
     // Update window title to show current mode
@@ -199,6 +209,7 @@ void computeBoneWeights() {
         } else {
             title += "GEODESIC | H:Heat | J:Voxel";
         }
+        title += usePruning ? " | P:PRUNE-ON" : " | P:Prune-off";
         glfwSetWindowTitle(globalWindow, title.c_str());
     }
     
@@ -286,6 +297,24 @@ void processInput(GLFWwindow *window) {
     }
     if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE) {
         jKeyPressed = false;
+    }
+    
+    // Toggle pruning with P key
+    static bool pKeyPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS && !pKeyPressed) {
+        usePruning = !usePruning;
+        std::cout << "Pruning: " << (usePruning ? "ON" : "OFF") << std::endl;
+        if (usePruning) {
+            pruneWeights();
+        } else {
+            // Recalculate weights to restore unpruned version
+            for (auto& v : vertices) { v.boneWeights.clear(); }
+            computeBoneWeights();
+        }
+        pKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE) {
+        pKeyPressed = false;
     }
     
     // Cycle Selection with Brackets
